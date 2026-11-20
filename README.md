@@ -29,10 +29,12 @@ The Git update uses checkout main followed by pull --ff-only. Git reports confli
 
 The initial DPWH snapshot import and verification are separate setup steps using factbook:import and factbook:verify. Subsequent deploys run schema migrations. The API health endpoint is /up.
 
+## Database collation
+
+The database connection defaults to utf8mb4_bin for compatibility with hosting MySQL/MariaDB installations. DB_COLLATION can override it when the server supports a different binary collation. After changing deployment settings or pulling this fix, run php artisan config:clear before php artisan migrate --force.
+
 ## Verification
 
 Workflow structure, embedded Bash and deployment-command behavior are checked locally with mocked SSH, Git, Composer and Artisan commands. An actual GitHub Actions run and server deployment still require the configured secrets and server checkout.
 
 [GitHub Actions concurrency documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)
-
-
