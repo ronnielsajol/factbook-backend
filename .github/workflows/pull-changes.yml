@@ -1,0 +1,80 @@
+name: Pull latest Factbook backend on server
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: factbook-backend-production
+  cancel-in-progress: false
+
+jobs:
+  pull:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PROD_HOST: ${{ secrets.PROD_HOST }}
+      PROD_PORT: ${{ secrets.PROD_PORT || '22' }}
+      PROD_USER: ${{ secrets.PROD_USER }}
+      PROD_REMOTE_PATH: ${{ secrets.PROD_REMOTE_PATH }}
+      PHP_BIN: ${{ secrets.PHP_BIN || 'php' }}
+
+    steps:
+      - name: Validate deployment settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${PROD_HOST:?Set the PROD_HOST repository secret}"
+          : "${PROD_USER:?Set the PROD_USER repository secret}"
+          : "${PROD_REMOTE_PATH:?Set the PROD_REMOTE_PATH repository secret}"
+          [[ "$PROD_PORT" =~ ^[0-9]+$ ]]
+
+      - name: Start ssh-agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Trust host
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.ssh"
+          ssh-keyscan -T 15 -p "$PROD_PORT" -H "$PROD_HOST" >> "$HOME/.ssh/known_hosts"
+
+      - name: Pull changes and update Laravel
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf -v remote_command 'bash -se -- %q %q' "$PROD_REMOTE_PATH" "$PHP_BIN"
+          ssh -T -p "$PROD_PORT" -o BatchMode=yes -o ConnectTimeout=15 \
+            "$PROD_USER@$PROD_HOST" "$remote_command" <<'REMOTE'
+          set -euo pipefail
+          export TERM=dumb
+          cd -- "$1"
+          PHP_BIN=$2
+
+          git checkout main
+          git pull --ff-only origin main
+
+          mkdir -p bootstrap/cache storage/framework/cache/data \
+            storage/framework/sessions storage/framework/views storage/logs
+
+          if [[ -f composer.phar ]]; then
+            composer_path=composer.phar
+          else
+            composer_path="$(command -v composer)"
+          fi
+          "$PHP_BIN" "$composer_path" install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+          "$PHP_BIN" "$composer_path" check-platform-reqs --no-dev
+
+          "$PHP_BIN" artisan config:clear
+          "$PHP_BIN" artisan migrate --force
+          "$PHP_BIN" artisan config:cache
+          "$PHP_BIN" artisan route:cache
+          REMOTE
+
