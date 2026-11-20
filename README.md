@@ -2,6 +2,8 @@
 
 The pull-changes workflow connects over SSH, updates the server's main branch with a fast-forward pull, installs locked production Composer dependencies, checks PHP extensions, runs migrations and rebuilds Laravel configuration and route caches. It runs on pushes to main and can be started manually from the Actions tab on main. Deployments run one at a time.
 
+For a manual redeploy, select **Pull latest Factbook backend on server** in the Actions tab, then choose **Run workflow** on **main**.
+
 ## GitHub repository secrets
 
 Configure these in the factbook-backend repository under Settings, Secrets and variables, Actions.
